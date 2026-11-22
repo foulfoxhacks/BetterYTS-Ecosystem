@@ -1,1 +1,976 @@
-# BetterYTS-Ecosystem---Release-Notes
+[BetterYTS_Combined_Feature_Map_and_Implementation_Blueprint.md](https://github.com/user-attachments/files/35244962/BetterYTS_Combined_Feature_Map_and_Implementation_Blueprint.md)
+# BetterYTS Ecosystem
+## Combined Feature Map & Implementation Blueprint
+
+**Document type:** Product and technical architecture specification  
+**Version:** 1.0 — Planning baseline  
+**Date:** November 22, 2026  
+**Status:** Proposed architecture; repository audit required before implementation
+
+---
+
+## 1. Executive Summary
+
+BetterYTS is the umbrella platform for media discovery, playback integrations, shared media experiences, and creator/audience engagement.
+
+**BetterYTS Stream** is the streaming and audience-engagement subsystem that PearConnect evolves into. It retains PearConnect's core purpose—song requests and audience interaction—while gaining access to BetterYTS's media resolution, queue, playback, account, and integration infrastructure.
+
+The intended product hierarchy is:
+
+- **BetterYTS:** Main platform and shared infrastructure.
+- **BetterYTS Stream:** Song requests, live audience engagement, stream integrations, moderation, overlays, and request-driven playback.
+- **BetterYTS Media / Music:** Media search, discovery, playlists, and supported playback experiences.
+- **BetterYTS VRChat:** In-world search, shared queues, ProTV-related workflows, and social media sessions.
+- **Intersip:** Separate creator analytics and social-data product; not part of the BetterYTS product hierarchy.
+
+This is a planning specification, not a claim that every listed feature currently exists. Feature status must be confirmed against the actual repositories and tested builds.
+
+### Product thesis
+
+**BetterYTS brings media and audiences together. BetterYTS Stream connects live audiences to the media experience.**
+
+The architectural objective is one shared platform with specialized modules and clients—not two independently maintained applications with duplicated queues, media resolution, or playback logic.
+
+---
+
+## 2. Product Goals and Non-Goals
+
+### 2.1 Goals
+
+1. Preserve useful PearConnect functionality and its existing user workflows.
+2. Make BetterYTS Stream a first-class, recognizable BetterYTS product area.
+3. Reuse BetterYTS media search, metadata, queue, playlist, and playback capabilities where appropriate.
+4. Accept requests and engagement events from supported streaming/community sources.
+5. Provide a consistent moderation and request-policy layer.
+6. Support local playback and progressively add supported BetterYTS playback destinations.
+7. Provide browser-source overlays and a central creator control panel.
+8. Keep integrations modular so one platform's failure does not break the entire system.
+9. Maintain clear security boundaries between incoming audience events and privileged playback controls.
+10. Make the migration incremental, testable, and reversible.
+
+### 2.2 Non-goals for the initial merge
+
+- Rebuilding every BetterYTS client at the same time.
+- Replacing every existing playback engine.
+- Promising universal compatibility with every streaming platform.
+- Circumventing platform restrictions, authentication, API quotas, or content licensing.
+- Automatically playing every audience request without validation or creator authorization.
+- Making Intersip a BetterYTS module.
+- Removing PearConnect's original code or repository history before parity and migration checks pass.
+
+---
+
+## 3. Product Hierarchy and Module Boundaries
+
+```text
+BetterYTS
+├── BetterYTS Core
+│   ├── Identity and authorization
+│   ├── Shared API and event contracts
+│   ├── Media metadata and resolution
+│   ├── Queue and playlist primitives
+│   ├── Realtime event delivery
+│   └── Integration management
+│
+├── BetterYTS Media / Music
+│   ├── Search and discovery
+│   ├── Media details
+│   ├── Playlists
+│   ├── Shared media sessions
+│   └── Supported playback clients
+│
+├── BetterYTS Stream
+│   ├── Audience connections
+│   ├── Song and media requests
+│   ├── Request queue
+│   ├── Moderation and policies
+│   ├── Playback routing
+│   ├── Stream overlays
+│   ├── Creator control center
+│   └── Engagement history and analytics
+│
+└── BetterYTS VRChat
+    ├── In-world search
+    ├── World and session integrations
+    ├── Shared queues
+    ├── ProTV integration
+    └── Creator / Unity tooling
+
+Separate product:
+Intersip
+└── Creator analytics and social-platform data
+```
+
+### Boundary rules
+
+- BetterYTS Core owns shared primitives and platform-wide contracts.
+- BetterYTS Stream owns request intake, request lifecycle, audience engagement, and Stream-specific moderation workflows.
+- Playback adapters own destination-specific playback commands.
+- Platform adapters own platform-specific connection and event parsing.
+- Clients render state and invoke authorized API operations; they do not independently reimplement queue policy.
+- VRChat integrations consume supported APIs/contracts and must not bypass authorization or request policy.
+
+---
+
+## 4. Combined Feature Map
+
+Feature statuses in this document are **Existing candidate**, **Preserve**, **Integrate**, or **New proposal**. These labels describe planning intent, not verified implementation status.
+
+### 4.1 BetterYTS core and media features
+
+| Capability | Scope | Plan |
+|---|---|---|
+| YouTube search/API | Search and media metadata | Preserve and audit |
+| In-world search | Search inside VRChat | Preserve |
+| Editor Tools | Unity-side configuration and workflows | Preserve |
+| ProTV integration | Supported media handoff/workflows | Preserve and validate |
+| Playlists | Create and manage media collections | Preserve |
+| Shared queues | Shared media ordering | Reconcile with Stream queue |
+| Watch parties | Shared media sessions | Preserve and integrate |
+| SponsorBlock | Supported segment metadata/actions | Preserve and validate |
+| DeArrow | Alternative title/thumbnail information | Preserve and validate |
+| Return YouTube Dislike | Dislike metadata integration | Preserve and validate |
+| BetterYTS Music | Music-oriented interface | Preserve and integrate |
+| Web interface | Browser-based discovery and controls | Preserve / extend |
+| Android client | Mobile access and workflows | Preserve / extend |
+| Media resolution | Resolve request/query to supported media | Shared service proposal |
+
+### 4.2 BetterYTS Stream: request and engagement features
+
+| Feature | Description | Priority |
+|---|---|---|
+| Song requests | Accept audience-submitted songs/media | P0 |
+| Multi-source intake | Normalize requests from supported sources | P0 |
+| Request parsing | Parse commands, URLs, IDs, and configured formats | P0 |
+| Media resolution | Match request to supported BetterYTS media | P0 |
+| Unified request queue | Maintain request order and lifecycle | P0 |
+| Request approval | Require approval or apply creator policy | P0 |
+| Queue controls | Approve, reject, remove, skip, reorder, clear | P0 |
+| Per-user limits | Cooldowns, quotas, and concurrent limits | P0 |
+| Duplicate detection | Prevent repeated or spammed requests | P0 |
+| Queue capacity | Maximum queue length and overflow behavior | P0 |
+| Local playback | Preserve PearConnect/Pear Desktop workflow | P0 |
+| Connection manager | Configure and monitor audience sources | P1 |
+| Browser overlays | Show now-playing, queue, and request feedback | P1 |
+| Request history | Searchable record of request outcomes | P1 |
+| Creator dashboard | Unified Stream controls and settings | P1 |
+| Playback routing | Send approved requests to supported destinations | P1 |
+| Shared session bridge | Feed authorized BetterYTS/VRChat sessions | P1 |
+| Engagement summaries | Counts and trends for request activity | P2 |
+| Custom commands | Creator-defined commands and aliases | P2 |
+| Rewards/loyalty hooks | Optional integrations with platform-native rewards | P2 |
+| Multi-channel profiles | Separate policies and queues per channel | P2 |
+| Advanced automation | Rules, schedules, and event-triggered actions | P3 |
+
+### 4.3 Audience and platform integrations
+
+Each platform integration must be independently implemented and tested. Availability depends on supported APIs, official permissions, and approved bridge software.
+
+| Source | Intake concept | Notes |
+|---|---|---|
+| Twitch | Chat listener and command parser | Use supported Twitch interfaces and authorization |
+| YouTube Live | Live chat event intake | Respect API access, quotas, and broadcast lifecycle |
+| TikTok LIVE | Supported connector or TikFinity bridge | Treat bridge capabilities and stability as external dependencies |
+| BetterYTS Web | Authenticated request form | Native first-party source |
+| BetterYTS Android | Authenticated request form | Native first-party source |
+| VRChat | Authorized world/session request interface | Must respect VRChat/Unity constraints and server trust boundaries |
+| Local API / CLI | Local authenticated request endpoint | Preserve automation use cases |
+| Other platforms | Adapter interface | Add only after feasibility and policy review |
+
+### 4.4 Stream overlays and audience feedback
+
+- Now Playing overlay.
+- Upcoming Requests overlay.
+- Recently Played overlay.
+- Request Received feedback.
+- Request Approved feedback.
+- Request Rejected feedback.
+- Queue Full feedback.
+- Request Instructions overlay.
+- Connection / session status.
+- Optional compact and expanded layouts.
+- Theme, typography, sizing, and animation settings.
+- Per-overlay access tokens with revocation and expiration.
+- Read-only overlay permissions by default.
+
+Overlays must not expose OAuth tokens, private account data, internal API credentials, or moderation-only information.
+
+### 4.5 Moderation and request policies
+
+- Approval-required, auto-approval, and restricted modes.
+- Per-user cooldowns and request quotas.
+- Per-channel and per-session policies.
+- Maximum queue size.
+- Duplicate and near-duplicate detection.
+- Allowed/blocked terms and artist/title restrictions.
+- Duration and content suitability limits where metadata permits.
+- Requester block/timeout controls.
+- Moderator roles and permissions.
+- Audit trail for moderation actions.
+- Rate limits and spam detection.
+- Clear feedback for rejected or unresolvable requests.
+- Manual override with recorded actor and reason.
+
+Automated filtering should be explainable and configurable. It must not be treated as a substitute for platform moderation or creator judgment.
+
+---
+
+## 5. User Roles and Primary Workflows
+
+### 5.1 Roles
+
+| Role | Permissions |
+|---|---|
+| Platform owner | Manage platform-level configuration and services |
+| Creator / channel owner | Manage their Stream connections, queue, policies, and playback destinations |
+| Moderator | Review requests and perform assigned queue actions |
+| Audience member | Submit requests and view permitted queue/feedback information |
+| Overlay viewer | Read public overlay state only |
+| Integration client | Submit events within its assigned scopes |
+| Local operator | Manage explicitly authorized local playback and automation |
+
+Use least-privilege access. A chat integration must not receive creator-owner permissions.
+
+### 5.2 Audience request workflow
+
+1. Audience member submits a command or request.
+2. Platform adapter receives the message.
+3. Adapter validates source connection and parses the request.
+4. Event router converts it into the canonical event contract.
+5. Request service validates requester, content, and request policy.
+6. Media resolver attempts to identify a supported media item.
+7. Moderation policy decides whether to reject, auto-approve, or require review.
+8. Queue service creates the queue entry.
+9. Realtime gateway notifies authorized clients and overlays.
+10. Playback router sends the item to the selected destination when eligible.
+11. Playback status updates the request lifecycle.
+12. History records the outcome.
+
+### 5.3 Creator setup workflow
+
+1. Open BetterYTS Stream.
+2. Create or select a Stream profile.
+3. Choose a queue and default playback destination.
+4. Connect supported audience sources.
+5. Configure request command syntax and limits.
+6. Select approval mode and moderator permissions.
+7. Configure overlays and copy their scoped URLs.
+8. Run a connection and playback test.
+9. Enable the live request intake.
+
+### 5.4 Moderator workflow
+
+1. View pending requests.
+2. Inspect resolved media and requester/source.
+3. Approve, reject, edit/resolve, or remove according to permissions.
+4. See queue position and playback destination.
+5. Review action history when needed.
+
+---
+
+## 6. Target Architecture
+
+```text
+AUDIENCE SOURCES
+  Twitch | YouTube Live | TikTok bridge | Web | Android | VRChat | Local API
+                              |
+                              v
+                    PLATFORM ADAPTERS
+                              |
+                              v
+                    NORMALIZED EVENT BUS
+                              |
+                              v
+                    REQUEST PROCESSOR
+                              |
+                 +------------+------------+
+                 |                         |
+                 v                         v
+          MEDIA RESOLVER             POLICY ENGINE
+                 |                         |
+                 +------------+------------+
+                              |
+                              v
+                       QUEUE SERVICE
+                              |
+                              v
+                     PLAYBACK ROUTER
+                              |
+           +------------------+------------------+
+           |                  |                  |
+           v                  v                  v
+      Pear Desktop       BetterYTS clients   VRChat / ProTV
+                              |
+                              v
+                    REALTIME EVENT GATEWAY
+                              |
+                  Dashboard / Overlays / Clients
+```
+
+### 6.1 Service responsibilities
+
+**Platform adapters**
+- Authenticate and maintain source connections.
+- Subscribe to permitted platform events.
+- Parse platform-specific messages.
+- Handle reconnects and source-specific rate limits.
+- Emit canonical events.
+- Never issue privileged playback commands directly.
+
+**Event router**
+- Validate event schema.
+- Attach source and correlation identifiers.
+- Deduplicate delivery where possible.
+- Route events to the appropriate service.
+
+**Request processor**
+- Parse and normalize request input.
+- Resolve requester identity within the source's namespace.
+- Enforce request eligibility.
+- Create a request record and state transitions.
+
+**Media resolver**
+- Reuse BetterYTS search and metadata capabilities.
+- Resolve URLs, IDs, and search queries.
+- Return canonical media references and supported destination information.
+- Distinguish unavailable, ambiguous, unsupported, and successful results.
+
+**Policy engine**
+- Evaluate creator/channel/session rules.
+- Enforce quotas, cooldowns, allow/deny lists, and moderation requirements.
+- Return a decision with reason codes.
+
+**Queue service**
+- Own ordering, capacity, lifecycle, and concurrency.
+- Provide atomic queue operations.
+- Persist queue state and history.
+- Prevent conflicting playback transitions.
+
+**Playback router**
+- Select a configured and compatible destination.
+- Check destination availability and authorization.
+- Dispatch commands through a destination adapter.
+- Report success/failure and playback state.
+
+**Realtime gateway**
+- Publish scoped state updates to dashboards and overlays.
+- Enforce channel/session authorization.
+- Support reconnect and state resynchronization.
+
+---
+
+## 7. Canonical Event and Data Contracts
+
+The following examples are proposed contracts. Adapt them to the current codebase and schema conventions during the repository audit.
+
+### 7.1 Canonical song request event
+
+```json
+{
+  "schemaVersion": "1",
+  "eventId": "unique-event-id",
+  "eventType": "song_request.submitted",
+  "source": {
+    "platform": "twitch",
+    "connectionId": "connection-id",
+    "channelId": "channel-id"
+  },
+  "actor": {
+    "platformUserId": "platform-user-id",
+    "displayName": "ViewerName"
+  },
+  "request": {
+    "input": "Artist - Song",
+    "inputType": "text"
+  },
+  "occurredAt": "2026-11-22T12:00:00Z",
+  "correlationId": "request-flow-id"
+}
+```
+
+### 7.2 Request lifecycle
+
+Recommended states:
+
+- `received`
+- `resolving`
+- `pending_approval`
+- `approved`
+- `queued`
+- `dispatching`
+- `playing`
+- `completed`
+- `rejected`
+- `skipped`
+- `failed`
+- `cancelled`
+
+State transitions must be validated. For example, a rejected request cannot transition directly to playing.
+
+### 7.3 Core entities
+
+| Entity | Key fields / purpose |
+|---|---|
+| StreamProfile | Owner, channel identity, configuration |
+| Connection | Platform, external identity, token reference, status |
+| AudienceSource | Source type and enabled capabilities |
+| AudienceActor | Platform-scoped requester identity |
+| Request | Input, source, actor, state, timestamps |
+| MediaItem | Canonical media ID, title, creator, duration, provider |
+| Queue | Owner, profile/session, policy, active state |
+| QueueEntry | Queue, request, position, state |
+| PlaybackDestination | Type, capabilities, connection state |
+| PlaybackSession | Destination, current item, state |
+| RequestPolicy | Limits, filters, approval mode |
+| ModerationAction | Actor, action, reason, timestamp |
+| Overlay | Profile, presentation settings, scoped token |
+| EventLog | Correlation ID, event type, outcome, safe metadata |
+
+### 7.4 Data ownership
+
+- BetterYTS Core owns shared account and media primitives.
+- BetterYTS Stream owns Stream profiles, requests, Stream policies, and engagement history.
+- Queue ownership must be explicit: a Stream queue may use shared queue primitives, but its request lifecycle remains owned by Stream.
+- Playback destinations own their connection and capability state.
+- Platform adapters own platform-specific connection state and token references.
+- Secrets are stored in a secure secret store or OS credential store, never in plain-text configuration or logs.
+
+---
+
+## 8. API Surface Proposal
+
+Use the existing BetterYTS API conventions where possible. These routes are a conceptual namespace, not a mandate to break existing endpoints.
+
+```text
+/api/stream/v1/
+├── profiles
+│   ├── GET    /
+│   ├── POST   /
+│   ├── GET    /:profileId
+│   └── PATCH  /:profileId
+│
+├── connections
+│   ├── GET    /
+│   ├── POST   /:platform/connect
+│   ├── POST   /:connectionId/disconnect
+│   └── GET    /:connectionId/status
+│
+├── requests
+│   ├── GET    /
+│   ├── POST   /
+│   ├── GET    /:requestId
+│   └── POST   /:requestId/action
+│
+├── queues
+│   ├── GET    /
+│   ├── GET    /:queueId
+│   ├── POST   /:queueId/reorder
+│   └── POST   /:queueId/action
+│
+├── policies
+│   ├── GET    /:profileId
+│   └── PUT    /:profileId
+│
+├── destinations
+│   ├── GET    /
+│   ├── POST   /:destinationId/connect
+│   ├── GET    /:destinationId/status
+│   └── POST   /:destinationId/command
+│
+├── overlays
+│   ├── GET    /
+│   ├── POST   /
+│   ├── POST   /:overlayId/rotate-token
+│   └── DELETE /:overlayId
+│
+└── events
+    └── GET    /stream
+```
+
+### API requirements
+
+- Version contracts explicitly.
+- Validate all inputs server-side.
+- Use idempotency keys for retried request submissions and commands.
+- Apply authorization per profile, queue, connection, and destination.
+- Return structured error codes.
+- Paginate history and request lists.
+- Rate-limit audience submission endpoints.
+- Use WebSocket or server-sent events only with scoped authorization.
+- Keep public overlay endpoints read-only and narrowly scoped.
+- Do not expose provider access tokens to clients.
+
+---
+
+## 9. Playback Destination Architecture
+
+Preserve the PearConnect local playback path as the first compatibility target. Add other destinations through adapters.
+
+Proposed interface:
+
+```ts
+interface PlaybackAdapter {
+  connect(): Promise<void>;
+  getCapabilities(): Promise<PlaybackCapabilities>;
+  getStatus(): Promise<PlaybackStatus>;
+  play(item: MediaItem): Promise<PlaybackResult>;
+  pause(): Promise<PlaybackResult>;
+  skip(): Promise<PlaybackResult>;
+  disconnect(): Promise<void>;
+}
+```
+
+Potential destinations:
+
+| Destination | Purpose | Rollout |
+|---|---|---|
+| Pear Desktop | Preserve existing local playback | First |
+| BetterYTS Web | Browser-based playback where supported | Later |
+| BetterYTS Music | Music-focused playback | Later |
+| ProTV | Supported VRChat world workflow | Validate separately |
+| VRChat session | Shared queue/session coordination | Later |
+| Other players | Adapter-based expansion | Future |
+
+Do not assume every destination supports every command or media type. Each adapter must advertise capabilities and return explicit unsupported-operation errors.
+
+---
+
+## 10. User Interface and Navigation
+
+Suggested BetterYTS navigation:
+
+```text
+BetterYTS
+├── Discover
+├── Search
+├── Music
+├── Playlists
+├── Watch Parties
+├── VRChat
+├── Stream
+│   ├── Overview
+│   ├── Connections
+│   ├── Request Queue
+│   ├── Moderation
+│   ├── Request Rules
+│   ├── Playback Destinations
+│   ├── Overlays
+│   └── History / Analytics
+└── Settings
+```
+
+### 10.1 Stream overview
+
+- Active Stream profile.
+- Connection health.
+- Pending request count.
+- Queue length.
+- Current playback state.
+- Selected playback destination.
+- Recent moderation actions.
+- Overlay status.
+- Quick pause/disable intake controls.
+
+### 10.2 Request queue
+
+- Search and filter.
+- Source and requester attribution.
+- Resolved media preview.
+- Approval/rejection controls.
+- Reorder and priority controls.
+- Duplicate warnings.
+- Queue capacity indicator.
+- Request status and error reason.
+
+### 10.3 Connections
+
+- Platform connection status.
+- Account/channel identity.
+- Required permissions.
+- Reconnect and disconnect.
+- Last event received.
+- Error diagnostics.
+- Test event workflow.
+
+### 10.4 Policies
+
+- Approval mode.
+- Request command and aliases.
+- Cooldown and quota.
+- Queue size.
+- Allowed/blocked content rules.
+- Moderator permissions.
+- Duplicate handling.
+- Feedback behavior.
+
+---
+
+## 11. Security, Privacy, and Reliability
+
+### 11.1 Security requirements
+
+- OAuth or platform-approved authorization flows.
+- Encrypt tokens at rest where applicable.
+- Prefer OS credential storage for local desktop credentials.
+- Never commit secrets or tokens to source control.
+- Redact credentials and sensitive payloads from logs.
+- Scope permissions by profile and function.
+- Use least privilege for moderators and integrations.
+- Authenticate local API actions; bind to loopback by default.
+- Require explicit secure remote-access configuration.
+- Use expiring, revocable, read-only overlay tokens.
+- Validate and sanitize all audience input.
+- Keep chat-originated events separate from privileged command authorization.
+- Audit moderation and playback control actions.
+
+### 11.2 Reliability requirements
+
+- Reconnect with bounded exponential backoff.
+- Deduplicate repeated platform events.
+- Use idempotent request submission.
+- Persist queue state safely.
+- Recover active queue state after restart.
+- Handle destination disconnects without losing requests.
+- Provide dead-letter/error handling for failed events.
+- Track adapter health and last successful event.
+- Support graceful shutdown.
+- Avoid duplicate playback after retries.
+- Provide a manual recovery and queue reconciliation path.
+
+### 11.3 Privacy and retention
+
+- Store only data needed for operation and user-visible history.
+- Provide configurable history retention.
+- Support deletion of Stream profile data where feasible and legally required.
+- Separate public overlay data from private moderation records.
+- Avoid collecting sensitive audience information unnecessarily.
+- Document third-party platform data handling and limitations.
+
+---
+
+## 12. Repository Merge and Migration Strategy
+
+Do not start by copying all PearConnect files into BetterYTS. First establish the actual code boundaries and dependencies.
+
+### 12.1 Audit both repositories
+
+Inspect:
+
+- Languages, frameworks, package managers, build systems.
+- Application entry points and runtime processes.
+- Request parsing and command syntax.
+- Queue implementation and persistence.
+- Pear Desktop playback control.
+- Local API endpoints and authentication.
+- Platform integrations and their dependencies.
+- BetterYTS media search and metadata APIs.
+- Existing BetterYTS queues, playlists, and session state.
+- Configuration formats and secret storage.
+- Tests, CI workflows, release process, and documentation.
+- Licensing and third-party dependency obligations.
+
+### 12.2 Build a parity matrix
+
+For every PearConnect feature, record:
+
+| Field | Required audit result |
+|---|---|
+| Feature | User-visible capability |
+| Current implementation | Exact module/files |
+| Dependencies | Libraries, services, external tools |
+| Data ownership | Files, DB, in-memory, remote |
+| API contract | Existing inputs/outputs |
+| Tests | Existing coverage and missing cases |
+| BetterYTS equivalent | Reuse, adapt, or new implementation |
+| Migration risk | Low / medium / high |
+| Acceptance test | Observable proof of parity |
+
+### 12.3 Migration principles
+
+1. Preserve original repository history.
+2. Preserve working PearConnect behavior during development.
+3. Avoid duplicate queue engines.
+4. Reuse BetterYTS media services only through stable contracts.
+5. Keep platform adapters isolated.
+6. Keep playback destination adapters isolated.
+7. Use feature flags for staged rollout.
+8. Maintain a rollback path.
+9. Migrate user configuration with explicit validation.
+10. Remove legacy code only after parity tests and release verification.
+
+### 12.4 Possible monorepo layout
+
+This is a target option, not an instruction to force a monorepo if the current deployment architecture makes it impractical.
+
+```text
+betteryts/
+├── apps/
+│   ├── web/
+│   ├── android/
+│   ├── desktop-bridge/
+│   └── overlays/
+├── packages/
+│   ├── core/
+│   ├── contracts/
+│   ├── media/
+│   ├── queue/
+│   ├── playback/
+│   ├── integrations/
+│   └── stream/
+│       ├── requests/
+│       ├── moderation/
+│       ├── policies/
+│       ├── connections/
+│       ├── overlays/
+│       └── history/
+├── services/
+│   ├── api/
+│   ├── realtime/
+│   └── media-resolution/
+├── integrations/
+│   ├── twitch/
+│   ├── youtube-live/
+│   ├── tiktok-bridge/
+│   ├── pear-desktop/
+│   ├── protv/
+│   └── vrchat/
+├── shared/
+│   ├── schemas/
+│   ├── types/
+│   └── utilities/
+└── docs/
+    ├── architecture/
+    ├── stream/
+    ├── api/
+    └── migration/
+```
+
+---
+
+## 13. Implementation Roadmap
+
+### Phase 0 — Repository discovery and baseline
+
+- Clone and inspect both repositories.
+- Run existing builds and tests.
+- Document current user workflows.
+- Establish a feature parity matrix.
+- Identify shared and conflicting data models.
+- Record known defects and platform limitations.
+
+**Exit criteria:** Verified architecture map, runnable baseline, and migration plan.
+
+### Phase 1 — Contracts and shared queue foundation
+
+- Define canonical media, request, queue, actor, and source types.
+- Define request state machine.
+- Add schema validation.
+- Establish queue persistence and atomic operations.
+- Implement deduplication and idempotency.
+- Preserve existing local queue behavior through an adapter.
+
+**Exit criteria:** Existing PearConnect requests can use the new queue contract without functional regression.
+
+### Phase 2 — PearConnect feature migration
+
+- Move or wrap request parsing.
+- Preserve command syntax where practical.
+- Migrate local API behavior.
+- Preserve Pear Desktop control.
+- Migrate configuration with validation.
+- Add compatibility and regression tests.
+
+**Exit criteria:** Existing PearConnect workflows pass parity tests under the BetterYTS Stream module.
+
+### Phase 3 — Source integrations
+
+- Integrate Twitch.
+- Integrate YouTube Live.
+- Integrate TikTok LIVE through the supported bridge path.
+- Normalize platform events.
+- Add reconnect, rate-limit, and duplicate-event handling.
+- Add connection diagnostics.
+
+**Exit criteria:** Each supported source can submit test requests into the same queue with correct source attribution.
+
+### Phase 4 — BetterYTS media and playback integration
+
+- Connect media resolution.
+- Implement destination capability contracts.
+- Preserve local playback.
+- Add supported BetterYTS destinations incrementally.
+- Add playback-state synchronization.
+- Handle failed/unsupported destinations safely.
+
+**Exit criteria:** Approved requests can be routed to configured compatible destinations and report truthful outcomes.
+
+### Phase 5 — Stream control center and overlays
+
+- Add Stream navigation and profile management.
+- Build connection dashboard.
+- Build queue and moderation interface.
+- Build request policy editor.
+- Build overlay configuration and token management.
+- Add history and initial engagement metrics.
+
+**Exit criteria:** A creator can configure and operate a Stream profile without relying on developer tools.
+
+### Phase 6 — VRChat and ecosystem expansion
+
+- Validate the VRChat integration contract.
+- Connect authorized shared queues.
+- Validate ProTV handoff limitations.
+- Add session-level permissions and lifecycle.
+- Test synchronization and failure recovery.
+
+**Exit criteria:** Supported VRChat workflows operate without bypassing the central request and policy services.
+
+### Phase 7 — Release hardening
+
+- Security review.
+- Dependency and license review.
+- Load and soak testing.
+- Upgrade/migration testing.
+- Backup and recovery testing.
+- Documentation and release notes.
+- Feature-flagged rollout.
+- Monitor error rates and rollback if required.
+
+**Exit criteria:** Release candidate meets all release gates below.
+
+---
+
+## 14. Testing and Acceptance Criteria
+
+### Functional tests
+
+- Submit a request from every supported source.
+- Resolve valid media.
+- Reject malformed and unsupported requests.
+- Enforce approval-required mode.
+- Enforce auto-approval policy.
+- Enforce cooldowns and quotas.
+- Detect duplicates.
+- Enforce queue capacity.
+- Reorder, skip, remove, and clear.
+- Recover queue after restart.
+- Preserve local playback.
+- Route to each supported destination.
+- Report failed playback accurately.
+- Update overlays after state changes.
+
+### Security tests
+
+- Unauthenticated clients cannot control queues.
+- Audience events cannot invoke privileged playback commands.
+- Moderators cannot exceed assigned permissions.
+- Overlay tokens cannot read private data.
+- Revoked tokens stop working.
+- Secrets do not appear in logs or client bundles.
+- Local API is not exposed remotely by default.
+- Invalid and oversized inputs are rejected safely.
+
+### Regression tests
+
+- Existing BetterYTS search still works.
+- Existing BetterYTS playlists still work.
+- Existing watch-party behavior remains functional.
+- Existing VRChat search and Editor Tools remain functional.
+- ProTV workflows remain functional where supported.
+- Existing PearConnect request and local playback workflows remain functional.
+
+### Release gates
+
+A release should not be considered complete until:
+
+1. All P0 acceptance tests pass.
+2. No known critical security issue remains.
+3. Existing core BetterYTS workflows pass regression tests.
+4. PearConnect parity requirements are satisfied or documented as intentional changes.
+5. Migration and rollback procedures are tested.
+6. Platform integration limitations are documented.
+7. User-facing setup and troubleshooting documentation exists.
+
+---
+
+## 15. Risks and Design Decisions
+
+| Risk | Mitigation |
+|---|---|
+| Two queue systems drift apart | Establish one authoritative queue service |
+| Platform API changes | Isolate adapters and monitor connection health |
+| TikTok bridge instability | Treat bridge as optional and independently replaceable |
+| Playback destination incompatibility | Capability negotiation and explicit errors |
+| Duplicate requests/events | Idempotency keys and deduplication |
+| Untrusted chat commands | Event validation and policy gate |
+| Secret leakage | Secure storage, redaction, scoped tokens |
+| Migration breaks users | Feature flags, compatibility layer, rollback |
+| Monorepo adds complexity | Audit first; retain separate deployables if appropriate |
+| Scope grows too quickly | P0/P1/P2/P3 sequencing and release gates |
+
+### Decisions to make during repository audit
+
+- Is BetterYTS's existing queue suitable for Stream requests, or should Stream own a request queue that references shared queue primitives?
+- Is Pear Desktop a standalone app, a local service, or both?
+- Which PearConnect functions depend on local state or platform-specific libraries?
+- Which BetterYTS APIs are stable enough for internal reuse?
+- Which clients need direct Stream functionality in the first release?
+- Is a monorepo justified, or should the modules remain separate packages/services?
+- What is the current deployment and authentication model?
+- Which platform connectors are officially supported and maintainable?
+
+Do not decide these from folder names alone. Verify them in source code and running builds.
+
+---
+
+## 16. Recommended Initial Release Scope
+
+The first integrated release should focus on a complete, dependable creator workflow rather than a large number of partially working integrations.
+
+### Release 1 — BetterYTS Stream Foundation
+
+- PearConnect request functionality preserved.
+- Unified request and queue contracts.
+- Local Pear Desktop playback preserved.
+- One or more verified source integrations.
+- Request approval and moderation.
+- Per-user limits and duplicate protection.
+- Basic creator dashboard.
+- Basic now-playing and queue overlay.
+- Secure connection and token handling.
+- Setup, migration, and troubleshooting documentation.
+
+### Release 2 — BetterYTS Ecosystem Integration
+
+- Additional verified source integrations.
+- BetterYTS media-resolution integration.
+- More playback destinations.
+- Enhanced overlays.
+- Stream profiles and multi-channel settings.
+- Request history and engagement summaries.
+- BetterYTS Music integration.
+
+### Release 3 — Social and VR Expansion
+
+- Authorized VRChat session integration.
+- ProTV workflow improvements where supported.
+- Shared session request queues.
+- Advanced audience interaction.
+- More automation and extensibility.
+- Additional integrations after feasibility review.
+
+---
+
+## 17. Final Product Definition
+
+**BetterYTS** is a unified media and audience-engagement platform.
+
+**BetterYTS Stream** is its streaming interaction subsystem, evolving from PearConnect. It connects live audience requests and engagement events to a moderated, unified media queue and supported playback destinations.
+
+It should preserve PearConnect's practical value while expanding its reach through BetterYTS's media infrastructure, web/mobile experiences, streaming overlays, and social VR integrations.
+
+### Guiding engineering principle
+
+> One platform. One trusted request pipeline. One shared media foundation. Multiple audience sources and playback destinations.
+
+The first engineering task is a source-level audit of the actual BetterYTS and PearConnect repositories. This document defines the intended destination; the audit determines the safest path to get there.
